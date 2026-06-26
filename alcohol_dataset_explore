@@ -1,0 +1,223 @@
+############################################################
+# 🧠 Alcohol RNA-seq Dataset – Guided Coding Exercise
+
+############################################################
+
+
+############################################################
+# PART 1 — CLEANING METADATA
+############################################################
+
+# The metadata is messy.
+# We care about:
+#   - Age
+#   - Sex
+#   - Tissue
+#   - AUD status
+#   - Depression
+
+#read the dataset
+GSE253155_series_matrix <- read_csv("/cloud/project/Spring_2026/Datasets/Human_AUD_GSE253155/GSE253155_series_matrix.csv")
+
+# -------------------------------------------
+# STEP 1: Transpose the metadata
+# -------------------------------------------
+meta_raw<-GSE253155_series_matrix
+# 👉 Transpose the object called "meta_raw"
+# HINT: use t()
+meta_raw_t<-t(meta_raw)
+
+colnames(meta_raw_t)<-meta_raw_t[1,]
+meta_raw_t<-meta_raw_t[-1,]
+
+
+# 👉 Check dimensions before and after
+# HINT: dim()
+
+
+
+
+# -------------------------------------------
+# STEP 2: Rename columns
+# -------------------------------------------
+
+# 👉 Check column names
+# HINT: colnames()
+
+
+#subset the meaningful columns
+meta_subset<-meta_raw_t[,c(7,10,11,13,14)]
+
+# 👉 Rename columns so they are meaningful
+# (Age, Sex, Tissue, AUD_Status, Depression, etc.)
+dim(meta_raw)
+dim(meta_raw_t)
+dim(meta_subset)
+
+#rename the columns
+colnames(meta_subset)<-c("brain_region","alcohol_status","sex","depression","smoking")
+# -------------------------------------------
+# STEP 3: Clean text fields
+# -------------------------------------------
+
+# Some entries look like:
+# "Age; 45"
+# We only want what comes AFTER the semicolon.
+
+# 👉 Remove everything before the semicolon in Age
+# HINT: sub(".*:", "", column_name)
+
+meta_subset<-sub(".*:", "", meta_subset)
+meta_subset<-as.data.frame(meta_subset)
+
+write.csv(meta_subset,file="cleaned_AUD_metadata.csv")
+
+
+############################################################
+# PART 2 — EXPLORE METADATA
+############################################################
+
+# 👉 Tabulate AUD status
+# HINT: table()
+
+meta_subset<-as.data.frame(meta_subset)
+
+table(meta_subset$alcohol_status)
+table(meta_subset$alcohol_status,meta_subset$depression)
+
+# 👉 Tabulate Depression status
+
+
+
+
+# 👉 Cross-tabulate AUD and Depression
+# HINT: table(x, y)
+
+
+
+
+# ❓ THINK:
+# Are groups balanced?
+# Would this affect differential expression?
+
+
+############################################################
+# PART 3 — SAVE CLEAN METADATA
+############################################################
+
+# 👉 Save cleaned metadata as CSV
+# HINT: write.csv()
+
+
+
+
+############################################################
+# PART 4 — LOAD COUNT MATRIX
+############################################################
+
+# 👉 Read the count matrix (text file, not CSV)
+# HINT: read.table()
+# Remember:
+#   header = ?
+#   row.names = ?
+#   sep = ?
+
+
+
+
+# 👉 View a subset of the matrix
+# HINT: counts[rows, columns]
+
+
+
+
+############################################################
+# PART 5 — CLEAN ENSEMBL IDS
+############################################################
+
+# Ensembl IDs look like:
+# ENSG00000002919.15
+# We must remove ".15"
+
+# 👉 Extract rownames
+
+
+
+
+# 👉 Remove everything after the dot
+# HINT: sub("\\..*", "", rownames(counts))
+
+
+
+
+# 👉 Check first few cleaned IDs
+# HINT: head()
+
+
+
+
+############################################################
+# PART 6 — CONVERT ENSEMBL TO GENE SYMBOLS
+# (PREWRITTEN — DO NOT MODIFY)
+############################################################
+
+# Install once if needed:
+# install.packages("BiocManager")
+# BiocManager::install("biomaRt")
+
+library(biomaRt)
+
+# Connect to Ensembl
+mart <- useMart("ensembl",
+                dataset = "hsapiens_gene_ensembl")
+
+# Remove version numbers from Ensembl IDs
+genes_clean <- sub("\\..*", "", rownames(counts))
+
+# Retrieve annotation
+annotation <- getBM(attributes = c("ensembl_gene_id",
+                                   "hgnc_symbol"),
+                    filters = "ensembl_gene_id",
+                    values = genes_clean,
+                    mart = mart)
+
+# Check dimensions
+dim(annotation)
+
+# IMPORTANT:
+# Not every Ensembl ID has an HGNC symbol.
+# Some genes will be lost — this is normal.
+
+
+############################################################
+# PART 7 — MERGE ANNOTATION BACK
+############################################################
+
+# 👉 Add cleaned Ensembl IDs as a column in counts
+
+
+
+
+# 👉 Merge annotation with counts
+# HINT: merge()
+# Merge by the Ensembl ID column
+
+
+
+
+# 👉 Compare dimensions before and after merge
+# HINT: dim()
+
+
+
+
+# ❓ FINAL QUESTIONS:
+# - Why did we lose some genes?
+# - Why is that acceptable?
+# - What is the difference between Ensembl ID and gene symbol?
+# - Are we ready for DESeq2?
+
+
+############################################################
+# END
+############################################################
