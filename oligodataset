@@ -1,0 +1,5 @@
+#for this dataset, we do not have a metadatafile but the coutns file has the sample name in columns
+#we need to create a dataframe with one column for sample names, and another column for group, if the sample name contains
+#alc, then it is alcohol group, if Ctl, then it is a control group
+#how can we do this
+oligo_counts_matrix <- read.delim("/cloud/project/Summer_2026/Datasets/Oligo_GSE239691_counts_matrix.txt")
