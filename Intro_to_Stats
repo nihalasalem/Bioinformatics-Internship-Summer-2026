@@ -1,0 +1,170 @@
+library(ggplot2)
+# ------------------------------------------------------------
+# STEP 1: The idea of a t-test using simple vectors
+# ------------------------------------------------------------
+# A t-test compares the averages (means) of TWO groups.
+# At its core, it only needs two numeric vectors.
+
+group_A <- c(10, 12, 11, 13, 12)
+group_B <- c(18, 20, 19, 21, 20)
+
+# Run a t-test on two simple vectors
+t.test(group_A, group_B)
+
+# Interpretation:
+# R compares the mean of group_A to the mean of group_B
+# and asks whether the difference is larger than expected by chance.
+
+
+# ------------------------------------------------------------
+# STEP 2: Load real biological data
+# ------------------------------------------------------------
+# Now we do the SAME thing, but using a real dataset.
+
+library(readr)
+
+species_brainmass_neurons <- read_csv(
+  "Spring_2026/Week3_intro/species_brainmass_neurons.csv"
+)
+
+# Look at the data structure
+head(species_brainmass_neurons)
+
+
+# ------------------------------------------------------------
+# STEP 3: Define the biological question
+# ------------------------------------------------------------
+# Question:
+# Do species in the order Glires differ in cortical neuron number
+# compared to species in the order Primata?
+
+# Null hypothesis (H0):
+# Glires and Primata have the same average number of neurons.
+
+# Alternative hypothesis (H1):
+# Glires and Primata have different average numbers of neurons.
+
+
+# ------------------------------------------------------------
+# STEP 4: Extract TWO numeric vectors from the dataframe
+# ------------------------------------------------------------
+# A dataframe contains many variables.
+# We only need ONE column (Neurons) for EACH group.
+
+glires_neurons_one_column <- species_brainmass_neurons[
+  species_brainmass_neurons$Order == "Glires",
+  "Neurons"
+]
+
+glires_neurons <- species_brainmass_neurons[
+  species_brainmass_neurons$Order == "Glires",]
+glires_neurons$Neurons
+
+primata_neurons <- species_brainmass_neurons[
+  species_brainmass_neurons$Order == "Primata",
+  
+]
+primata_neurons$Neurons
+# Check what we extracted
+glires_neurons
+primata_neurons
+
+# Each object is now:
+# - A numeric vector
+# - One value per species
+
+
+# ------------------------------------------------------------
+# STEP 5: Run the t-test on the real data
+# ------------------------------------------------------------
+t.test(glires_neurons$Neurons, primata_neurons$Neurons)
+
+# Output includes:
+# - t statistic (size of difference relative to variability)
+# - p-value (how likely this difference is due to chance)
+# - confidence interval for the difference in means
+
+
+# ------------------------------------------------------------
+# STEP 6: How to interpret the result
+# ------------------------------------------------------------
+# If p < 0.05:
+#   The difference in neuron number is unlikely due to chance.
+#   We reject the null hypothesis.
+#
+# If p >= 0.05:
+#   The observed difference could be explained by random sampling.
+#   We do not reject the null hypothesis.
+
+# Once you understand subsetting, everything above can be done
+# in a single line of code.
+
+t.test(
+  species_brainmass_neurons[species_brainmass_neurons$Order == "Glires", "Neurons"],
+  species_brainmass_neurons[species_brainmass_neurons$Order == "Primata", "Neurons"]
+)
+
+# ------------------------------------------------------------
+# BIG TAKEAWAY
+# ------------------------------------------------------------
+# A t-test ALWAYS compares two numeric vectors.
+# Dataframes just help us organize and select those vectors.
+
+
+
+##Now you do it, 
+#is the cortex mass statistically different between Afrotheria (elephants) and Artiodactyla (cows,sheep,deer)
+t.test(
+  species_brainmass_neurons[species_brainmass_neurons$Order == "Afrotheria", "cortex_mass_g"],
+  species_brainmass_neurons[species_brainmass_neurons$Order == "Artiodactyla", "cortex_mass_g"]
+)
+
+
+
+#can you make a boxplot or scatter plot for only those two "orders"
+
+
+
+# ============================================
+# Correlation Analysis: Cortex Size vs Neurons
+# ============================================
+
+# Load required package
+library(ggplot2)
+
+
+
+# --------------------------------------------
+# Scientific question
+# Do species with larger cortices have more neurons?
+# --------------------------------------------
+
+# --------------------------------------------
+# Pearson correlation test
+# --------------------------------------------
+
+cor.test(
+  species_brainmass_neurons$cortex_mass_g,
+  species_brainmass_neurons$Neurons,
+  method = "pearson"
+)
+
+# --------------------------------------------
+# Visualize the relationship
+# --------------------------------------------
+
+ggplot(
+  species_brainmass_neurons,
+  aes(x = cortex_mass_g, y = Neurons)
+) +
+  geom_point(size = 2, alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    title = "Cortex Mass vs Cortical Neuron Number Across Species",
+    x = "Cortex mass (g)",
+    y = "Total cortical neurons"
+  ) +
+  theme_minimal()
+
