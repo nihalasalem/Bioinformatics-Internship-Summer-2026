@@ -1,0 +1,234 @@
+############################################################
+# 🧠 GLIOBLASTOMA DATA ANALYSIS — IVY GAP STUDY
+############################################################
+
+############################################################
+# DATASET BACKGROUND
+############################################################
+
+# The Ivy Glioblastoma Atlas Project (Ivy GAP) provides
+# high-resolution RNA sequencing data from distinct
+# anatomic structures within human glioblastoma tumors.
+#
+# RNA was isolated using laser microdissection.
+#
+# The dataset includes:
+#   - 122 RNA samples from 5 anatomical structures
+#   - Collected from 10 tumors
+#
+# The 5 structures identified by H&E staining:
+#   - Leading Edge (LE)
+#   - Infiltrating Tumor (IT)
+#   - Cellular Tumor (CT)
+#   - Microvascular Proliferation (MVP)
+#   - Pseudopalisading Cells Around Necrosis (PAN)
+#
+# NOTE:
+# We are NOT analyzing the cancer stem cell dataset (148 samples).
+# We are focusing ONLY on the 122 anatomical structure samples.
+#
+# Today, you will:
+#   1. Explore sample metadata
+#   2. Subset samples with reference histology
+#   3. Match RNA well IDs to raw counts
+#   4. Prepare raw counts table
+#   5. Replace gene IDs with gene symbols
+############################################################
+
+
+
+############################
+# STEP 1 — Explore Sample Metadata
+############################
+
+# Read all csv files in the glioblastoma dataset folder
+
+# Look at column names
+colnames(columns_samples)
+
+# There are MANY columns.
+# For today, we will focus ONLY on:
+#   - structure_name
+#   - tumor_id
+#   - rna_well_id
+#   - structure_annotation (or similar column)
+
+# Tabulate structure names
+table(columns_samples$structure_name)
+
+# How many samples per tumor?
+table(columns_samples$tumor_id)
+
+# 👉 Question:
+# Do some tumors contribute multiple samples
+# of the SAME structure?
+
+
+
+############################
+# STEP 2 — Subset Samples with Reference Histology
+############################
+
+# We only want rows corresponding to:
+# "Reference Histology"
+
+# Important:
+# We are subsetting ROWS (samples),
+# not columns.
+
+# Hint:
+# grep() searches for a word or pattern
+# inside a vector of text.
+#
+# It returns the POSITION (row numbers)
+# where that word appears.
+#
+# Example:
+# grep("apple", fruit_vector)
+# → returns indices where "apple" is found
+
+# Use grep to find rows containing
+# the phrase "reference histology"
+
+# reference_rows <- grep("reference histology",
+#                        columns_samples$_____ ,
+#                        ignore.case = TRUE)
+
+# Now subset the metadata by ROWS:
+# columns_subset <- columns_samples[reference_rows, ]
+
+# Check dimensions
+dim(columns_subset)
+
+# Confirm structures again
+table(columns_subset$structure_name)
+
+
+
+############################
+# STEP 3 — Inspect RNA Well IDs
+############################
+
+# Look at RNA well IDs
+head(columns_subset$rna_well_id)
+
+# 👉 These IDs should match COLUMN names
+# in the raw counts matrix.
+
+# Our goal:
+# Keep only raw count columns
+# that match these RNA well IDs.
+
+
+
+############################
+# STEP 4 — Load Raw Counts Table
+############################
+
+# Read raw counts table
+
+# Inspect dimensions
+dim(raw_counts)
+
+# Look at column names
+head(colnames(raw_counts))
+
+# 👉 Do these column names match rna_well_id?
+
+# Subset the raw counts matrix by COLUMNS:
+# raw_counts_subset <- raw_counts[ ,
+#       colnames(raw_counts) %in% columns_subset$rna_well_id ]
+
+# Confirm new dimensions
+dim(raw_counts_subset)
+
+
+
+############################
+# STEP 5 — Tumor vs Structure Distribution
+############################
+
+table(columns_subset$tumor_id,
+      columns_subset$structure_name)
+
+# 👉 Interpretation Question:
+#
+# If a tumor has 4 samples of "Cellular Tumor",
+# what does that mean?
+#
+# Are these:
+#   - Technical replicates?
+#   - Biological replicates?
+#
+# Think about:
+# Laser microdissection.
+# Different regions within the same tumor.
+#
+# Write your reasoning here:
+
+
+
+############################
+# STEP 6 — Inspect Gene Annotation Table
+############################
+
+head(row_genes)
+colnames(row_genes)
+
+# 👉 Identify:
+#   - Gene ID column (ENSG...)
+#   - Gene symbol column
+
+# Extract only those two columns
+# gene_annotation <- row_genes[ , c("_____", "_____") ]
+
+
+
+############################
+# STEP 7 — Replace Gene IDs with Gene Symbols
+############################
+
+# Look at row names of raw_counts_subset
+head(rownames(raw_counts_subset))
+
+# 👉 Are these ENSG IDs?
+
+# Merge raw counts with gene annotation
+# raw_counts_merged <- merge(raw_counts_subset,
+#                            gene_annotation,
+#                            by = "gene_id")
+
+# Did number of rows change?
+# Why might that happen?
+
+
+
+############################
+# STEP 8 — Set Gene Symbols as Row Names
+############################
+
+# Replace row names with gene symbols
+
+# Remove unnecessary columns if desired
+
+# Inspect row names again
+head(rownames(raw_counts_merged))
+
+# 👉 Do you now see readable gene symbols?
+# Example: EGFR, VEGFA, PDGFRA, etc.
+
+
+
+############################################################
+# FINAL CHECK
+############################################################
+
+# ✔ Metadata subsetted to reference histology
+# ✔ Raw counts matrix subsetted to matching RNA wells
+# ✔ Gene IDs converted to gene symbols
+#
+# Optional:
+# Save cleaned metadata and raw counts
+# as new CSV files.
+#
+# Do you remember how to save a dataframe as CSV?
