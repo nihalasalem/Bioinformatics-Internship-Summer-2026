@@ -3,3 +3,20 @@
 #alc, then it is alcohol group, if Ctl, then it is a control group
 #how can we do this
 oligo_counts_matrix <- read.delim("/cloud/project/Summer_2026/Datasets/Oligo_GSE239691_counts_matrix.txt")
+
+#create a metadata_frame
+meta<-data.frame(sample=colnames(oligo_counts_matrix))
+#delete the first row
+meta<-meta[-1,]
+meta<-as.data.frame(meta)
+meta$group<-NA
+
+###
+grepl("Alc",meta$meta)
+
+meta$group<-ifelse(grepl("Alc",meta$meta)==TRUE,"Alcohol","Control")
+
+#write this metadata as csv file
+write.csv(meta,file="oligodendro_metadata.csv")
+
+table(meta$group)
