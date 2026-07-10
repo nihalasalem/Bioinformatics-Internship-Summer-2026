@@ -1,0 +1,341 @@
+#good tutorials
+#https://rtguides.it.tufts.edu/bio/tutorials/de-seq2-in-r-ood.html
+#https://introtogenomics.readthedocs.io/en/latest/2021.11.11.DeseqTutorial.html
+
+############################################################
+# RNA-Seq Differential Expression with DESeq2
+# Alcohol Use Disorder Dataset
+############################################################
+
+############################################################
+# LESSON PLAN 
+############################################################
+# 1. What is differential expression?
+# 2. Run DESeq2 on ALL samples combined
+# 3. Interpret results
+# 4. PCA visualization
+
+
+#read the counts data of the alcohol data set
+#read the meta data, and subset it (we worked on it last class, 
+#I am just copying and pasting the code from last time)
+library(readr)
+#read the dataset
+counts <- read.delim("/cloud/project/Summer_2026/Datasets/Human_AUD_GSE253155/counts.txt")
+GSE253155_series_matrix <- read_csv("/cloud/project/Summer_2026/Datasets/Human_AUD_GSE253155/GSE253155_series_matrix.csv")
+# Transpose the metadata
+meta_raw<-GSE253155_series_matrix
+meta_raw_t<-t(meta_raw)
+colnames(meta_raw_t)<-meta_raw_t[1,]
+meta_raw_t<-meta_raw_t[-1,]
+#subset the meaningful columns
+meta_subset<-meta_raw_t[,c(7,10,11,13,14)]
+# 👉 Rename columns so they are meaningful
+# (Age, Sex, Tissue, AUD_Status, Depression, etc.)
+#rename the columns
+colnames(meta_subset)<-c("brain_region","alcohol_status","sex","depression","smoking")
+#Clean text fields
+# Some entries look like:
+# "Age; 45"
+# We only want what comes AFTER the semicolon.
+meta_subset<-sub(".*:", "", meta_subset)
+meta_subset<-as.data.frame(meta_subset)
+############################################################
+# 🧬 PART 1 — CHECK SAMPLE MATCHING
+############################################################
+
+
+
+# Row names of metadata MUST match column names of count matrix
+
+all(rownames(meta_subset) == colnames(counts))
+
+length(intersect(rownames(meta_subset), colnames(counts)))
+
+# View mismatches if needed
+View(data.frame(
+  metadata_samples = rownames(meta_subset),
+  count_samples = colnames(counts)
+))
+ #QUESTION:
+# Why is sample matching critical before running DESeq2?
+
+
+############################################################
+# 🧹 PART 2 — CLEAN SAMPLE NAMES
+############################################################
+##turns out the samples names are not matched, lets look at  why they are different
+
+#gsub  is a very useful way of manipulating text
+
+# Remove ".1" at the end of sample names
+colnames(counts) <- gsub("\\.1$", "", colnames(counts))
+
+# Remove "_merged" at the end of sample names
+colnames(counts) <- gsub("_merged$", "", colnames(counts))
+
+sample_names_dataframe<-data.frame(counts_names=colnames(counts),metadata_names=rownames(meta_subset))
+
+#now check if the row names and colnames matches and in the same order
+all(rownames(meta_subset) == colnames(counts))
+
+
+
+############################################################
+# 📦 PART 3 — INSTALL AND LOAD DESeq2
+############################################################
+#if (!require("BiocManager", quietly = TRUE))
+#install.packages("BiocManager")
+
+#BiocManager::install("DESeq2")
+library(DESeq2)
+
+
+############################################################
+# 🧬 PART 4 — RUN DESEQ2 (ALL SAMPLES COMBINED)
+############################################################
+
+# Convert alcohol status to factor
+#we did not discuss yet what a factor is
+meta_subset$alcohol_status <- as.factor(meta_subset$alcohol_status)
+
+# Design formula:
+# ~ alcohol_status
+# This means: compare Alcohol vs Control
+dds <- DESeqDataSetFromMatrix(
+  countData = counts,
+  colData = meta_subset,
+  design = ~ alcohol_status
+)
+
+dds
+
+dds <- DESeq(dds)
+
+res <- results(dds)
+
+res_table<-as.data.frame(res)
+
+# QUESTIONS:
+# 1. What groups did we compare?
+# 2. What might be the problem with combining PFC and NAc?
+
+
+############################################################
+# 🧬 PART 5 — ADD GENE SYMBOLS
+############################################################
+#what is ensemble id, gene names, gene symbols
+
+BiocManager::install("biomaRt")
+library(biomaRt)
+
+# Connect to Ensembl
+mart <- useMart("ensembl",
+                dataset = "hsapiens_gene_ensembl")
+
+# Remove version numbers from Ensembl IDs, wy?
+rownames(res) <- sub("\\..*", "", rownames(res))
+
+# Retrieve annotation
+annotation <- getBM(
+  attributes = c("ensembl_gene_id", "hgnc_symbol"),
+  filters = "ensembl_gene_id",
+  values = rownames(res),
+  mart = mart
+)
+
+# Merge annotation with DESeq2 results
+res_merged <- merge(
+  as.data.frame(res),
+  annotation,
+  by.x = "row.names",
+  by.y = "ensembl_gene_id"
+)
+#subset results_merged to keep only p-value<0.05
+
+
+##extract the normalized count matrix, we will use it later
+##what does normalized mean
+norm_counts <- counts(dds, normalized = TRUE)
+# Remove version numbers from Ensembl IDs, wy?
+rownames(norm_counts ) <- sub("\\..*", "", rownames(norm_counts ))
+
+#merge it with the gene names as we did before
+# Retrieve annotation
+annotation <- getBM(
+  attributes = c("ensembl_gene_id", "hgnc_symbol"),
+  filters = "ensembl_gene_id",
+  values = rownames(norm_counts),
+  mart = mart
+)
+
+# Merge annotation with DESeq2 results
+norm_counts_merged <- merge(
+  as.data.frame(norm_counts),
+  annotation,
+  by.x = "row.names",
+  by.y = "ensembl_gene_id"
+)
+#save it
+write.csv(norm_counts_merged,"AUD_normalized_counts.csv")
+
+############################################################
+# 📊 PART 6 — BASIC VOLCANO STYLE SCATTER
+############################################################
+
+plot(res_merged$log2FoldChange,
+     -log10(res_merged$pvalue),
+     xlab = "Log2 Fold Change",
+     ylab = "-Log10(p-value)",
+     main = "Volcano-style Plot")
+
+# IN-CLASS QUESTION:
+# What does log2FoldChange mean biologically?
+# What does -log10(pvalue) represent?
+
+
+############################################################
+# 📝 FILTER SIGNIFICANT GENES
+############################################################
+
+# Filter genes with p-value < 0.05
+sig_genes <- res_merged[res_merged$pvalue < 0.05, ]
+
+# How many genes?
+nrow(sig_genes)
+
+# IN-CLASS DISCUSSION:
+# Is p < 0.05 enough?
+# What is adjusted p-value?
+
+
+############################################################
+# 📊 PART 7 — PCA VISUALIZATION
+############################################################
+
+vsd <- vst(dds, blind = TRUE)
+
+
+plotPCA(vsd, intgroup = "alcohol_status")
+plotPCA(vsd, intgroup = "brain_region")
+plotPCA(vsd, intgroup = "sex")
+plotPCA(vsd, intgroup = c("brain_region", "alcohol_status"))
+plotPCA(vsd, intgroup = c("brain_region", "alcohol_status", "sex"))
+
+
+p <- plotPCA(vsd, intgroup = "alcohol_status")
+p + geom_point(size = 1)
+p + geom_point(size = 1)+theme(legend.position = "none")
+
+
+
+
+# IN-CLASS QUESTIONS:
+# 1. What does PCA show?
+# 2. What is PC1?
+# 3. Are samples clustering by alcohol or brain region?
+# 4. What does this tell us?
+
+
+############################################################
+# 🧠 CONCEPT: WHAT IS A COVARIATE?
+############################################################
+# A covariate is a variable that may influence gene expression
+# but is NOT the main variable of interest.
+#
+# Examples:
+# - Sex
+# - Age
+# - Brain region
+# - Batch
+#
+# If we want to control for them:
+# design = ~ brain_region + sex + alcohol_status
+
+# IN-CLASS QUESTION:
+# Why would we want to control for brain region?
+
+
+#add this to your code from previous class
+#now include covariates
+length(which(res$pvalue<0.05))
+dds_covar <- DESeqDataSetFromMatrix(countData = counts,
+                                    colData = meta_subset,
+                                    design = ~ sex+depression+smoking+alcohol_status)
+dds_covar
+dds_covar <- DESeq(dds_covar)
+resultsNames(dds_covar)
+res_covar <- results(dds_covar,name="alcohol_status_.non_AUD_Control_vs_.AUD_Case")
+length(which(res_covar$pvalue<0.05))
+View(as.data.frame(res_covar))
+rownames(res_covar)<-sub("\\..*", "", rownames(res_covar))
+options(timeout = 900)   # 5 minutes
+annotation <- getBM(attributes = c("ensembl_gene_id",
+                                   "hgnc_symbol"),
+                    filters = "ensembl_gene_id",
+                    values = rownames(res_covar),
+                    mart = mart)
+
+# Check dimensions
+dim(annotation)
+
+#merge with res
+res_covar_merged<-merge(as.data.frame(res_covar),annotation,by.x = "row.names",   # use rownames of counts
+                        by.y = "ensembl_gene_id" )
+
+#what do you realize about the number of differentialy expressed genes, compared to the model with no-covariates
+
+
+#By default, DESeq2 uses the first level of the factor as the reference level.
+#Log2 fold change is always:"(second level)vs(first level)"
+meta_subset$alcohol_status
+#AUD_Case  non_AUD_Control
+#this means our fold change is control/AUD, so positive is higher in the control
+#other way to check it
+resultsNames(dds)
+#"alcohol_status_.non_AUD_Control_vs_.AUD_Case"
+#it is better to flip it , so that the control is the reference
+#how to do that
+#do this BEFORE you run deseq2
+meta_subset$alcohol_status <- relevel(meta_subset$alcohol_status, ref = " non_AUD_Control")
+
+##export a csv table with the genes with adjusted p-value less than 0.05
+sig_dds_covar<-res_covar_merged[which(res_covar_merged$padj<0.05),]
+write.csv(sig_dds_covar,file="deseq_AUD_covariates_significant_02272026.csv")
+#what is adjusted p-value
+
+##if you are interested in alcohol males vs control male, alcohol female vs control female
+##and control male vs control female
+#you can create a new column merging those two variables, and run Deseq2 on this variable
+meta_subset$aud_sex<-paste0(meta_subset$alcohol_status,meta_subset$sex)
+
+dds_merge <- DESeqDataSetFromMatrix(countData = counts,
+                                    colData = meta_subset,
+                                    design = ~ depression+smoking+aud_sex)
+dds_merge
+dds_merge <- DESeq(dds_merge)
+resultsNames(dds_merge)
+##before we go to Metascape
+#exporting normalized gene counts (you will use them in some figures)
+#how do we save one object
+#how to move the whole environment
+#how to load the environment
+#how to load one object
+#revise how to export figures
+
+save.image("/cloud/project/Spring_2026/deseq_class/working_enviroment_AUD_Feb27.RData")
+saveRDS(dds, file = "mydeseqobject.rds")
+############################################################
+# HOMEWORK QUESTIONS
+############################################################
+# Homework
+# 1. run DESeq2 on your dataset
+# 2. Answer:
+#    - How many DE genes (p < 0.05)?
+#    - Top 5 upregulated genes?
+#    - Top 5 downregulated genes?
+# 4. Look up what does "covariate" mean and why is it important" One source is:
+#https://pluto.bio/resources/Learning%20Series/the-importance-of-covariates-in-rna-seq-and-other-omics-data-analysis
+
+
+
