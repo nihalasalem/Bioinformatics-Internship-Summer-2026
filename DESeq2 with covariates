@@ -1,0 +1,445 @@
+##DeSeq2 with covariates
+
+#read the counts data of the alcohol data set
+#read the meta data, and subset it (we worked on it last class, 
+#I am just copying and pasting the code from last time)
+library(readr)
+#read the dataset
+counts <- read.delim("/cloud/project/Summer_2026/Datasets/Human_AUD_GSE253155/counts.txt")
+GSE253155_series_matrix <- read_csv("/cloud/project/Summer_2026/Datasets/Human_AUD_GSE253155/GSE253155_series_matrix.csv")
+# Transpose the metadata
+meta_raw<-GSE253155_series_matrix
+meta_raw_t<-t(meta_raw)
+colnames(meta_raw_t)<-meta_raw_t[1,]
+meta_raw_t<-meta_raw_t[-1,]
+#subset the meaningful columns
+meta_subset<-meta_raw_t[,c(7,10,11,13,14)]
+# 👉 Rename columns so they are meaningful
+# (Age, Sex, Tissue, AUD_Status, Depression, etc.)
+#rename the columns
+colnames(meta_subset)<-c("brain_region","alcohol_status","sex","depression","smoking")
+#Clean text fields
+# Some entries look like:
+# "Age; 45"
+# We only want what comes AFTER the semicolon.
+meta_subset<-sub(".*:", "", meta_subset)
+meta_subset<-as.data.frame(meta_subset)
+############################################################
+# 🧬 PART 1 — CHECK SAMPLE MATCHING
+############################################################
+
+
+
+# Row names of metadata MUST match column names of count matrix
+
+all(rownames(meta_subset) == colnames(counts))
+
+length(intersect(rownames(meta_subset), colnames(counts)))
+
+# View mismatches if needed
+View(data.frame(
+  metadata_samples = rownames(meta_subset),
+  count_samples = colnames(counts)
+))
+#QUESTION:
+# Why is sample matching critical before running DESeq2?
+
+
+############################################################
+# 🧹 PART 2 — CLEAN SAMPLE NAMES
+############################################################
+##turns out the samples names are not matched, lets look at  why they are different
+
+#gsub  is a very useful way of manipulating text
+
+# Remove ".1" at the end of sample names
+colnames(counts) <- gsub("\\.1$", "", colnames(counts))
+
+# Remove "_merged" at the end of sample names
+colnames(counts) <- gsub("_merged$", "", colnames(counts))
+
+sample_names_dataframe<-data.frame(counts_names=colnames(counts),metadata_names=rownames(meta_subset))
+
+#now check if the row names and colnames matches and in the same order
+all(rownames(meta_subset) == colnames(counts))
+
+############################################################
+# DESeq2 WITH COVARIATES
+#
+# Learning objectives:
+# 1. Explain what a covariate is
+# 2. Include covariates in a DESeq2 model
+# 3. Extract a specific comparison
+# 4. Add gene symbols to DESeq2 results
+# 5. Assess and export differentially expressed genes
+# 6. Extract and plot normalized counts
+# 7. Prepare gene lists for Metascape
+# 8. Save and reload your work
+############################################################
+
+
+############################################################
+# 1. WHAT IS A COVARIATE?
+############################################################
+
+# A covariate is a measured variable that may influence
+# gene expression but is not the main variable of interest.
+#
+# Examples:
+# - Sex
+# - Age
+# - Smoking status
+# - Depression status
+# - Brain region
+# - Sequencing batch
+#
+# In this analysis:
+#
+# Main variable of interest: _______________________________
+#
+# Covariates:
+# 1. ______________________
+# 2. ______________________
+# 3. ______________________
+#
+# Our design will be:
+#
+# design = ~ sex + depression + smoking + alcohol_status
+#
+
+
+############################################################
+# 2. CHECK THE METADATA
+############################################################
+
+
+table(meta_subset$sex)
+table(meta_subset$depression)
+table(meta_subset$smoking)
+table(meta_subset$alcohol_status)
+
+# Count the number of samples in each category* alcohol status
+
+
+
+
+############################################################
+# 4. CREATE THE DESEQ2 DATASET
+############################################################
+
+library(DESeq2)
+
+dds_covar <- DESeqDataSetFromMatrix(
+  countData = counts,
+  colData = meta_subset,
+  design = ~ sex + depression + smoking + alcohol_status
+)
+
+dds_covar
+
+# The main variable of interest is placed last for convenience.
+#
+# For a simple additive model, changing the order of the
+# variables does not change the fitted model.
+
+
+############################################################
+# 5. RUN DESEQ2
+############################################################
+
+dds_covar <- DESeq(dds_covar)
+
+
+############################################################
+# 6. VIEW THE AVAILABLE Comparisons
+############################################################
+
+resultsNames(dds_covar)
+
+
+
+############################################################
+# 7. EXTRACT THE AUD COMPARISON
+############################################################
+
+# Request the comparison explicitly:
+#
+# AUD Case versus non-AUD Control
+
+res_covar <- results(
+  dds_covar,
+  contrast = c(
+    "alcohol_status",
+    " AUD_Case",
+    " non_AUD_Control"
+  ))
+
+# Sort genes by adjusted p-value
+
+res_covar <- res_covar[order(res_covar$padj), ]
+
+
+#change to data frame
+
+res_covar <-as.data.frame(res_covar)
+
+
+############################################################
+# 8. REMOVE ENSEMBL VERSION NUMBERS
+############################################################
+
+# Ensembl IDs may contain version numbers:
+#
+# ENSG00000123456.7
+#
+# BioMart usually expects:
+#
+# ENSG00000123456
+
+rownames(res_covar) <- sub(
+  "\\..*",
+  "",
+  rownames(res_covar)
+)
+
+
+############################################################
+# 9. ADD GENE SYMBOLS BEFORE ASSESSING DE GENES
+############################################################
+
+library(biomaRt)
+
+options(timeout = 900)
+
+# Retrieve Ensembl gene IDs and HGNC gene symbols
+
+annotation <- getBM(
+  attributes = c(
+    "ensembl_gene_id",
+    "hgnc_symbol"
+  ),
+  filters = "ensembl_gene_id",
+  values = rownames(res_covar),
+  mart = mart
+)
+
+# Check the annotation table
+
+dim(annotation)
+head(annotation)
+
+# Convert the DESeq2 results to a data frame
+
+res_covar_df <- as.data.frame(res_covar)
+
+# Preserve the Ensembl IDs as a regular column
+
+res_covar_df$ensembl_gene_id <- rownames(res_covar_df)
+
+# Merge DESeq2 results with gene annotation
+
+res_covar_merged <- merge(
+  res_covar_df,
+  annotation,
+  by = "ensembl_gene_id",
+  all.x = TRUE
+)
+
+View(res_covar_merged)
+
+
+############################################################
+# 10. ASSESS DIFFERENTIALLY EXPRESSED GENES
+############################################################
+
+
+
+# Count genes with increased expression in AUD
+#do it yourself
+
+# Count genes with decreased expression in AUD
+
+#do it yourself
+
+
+# Genes increased in AUD: _________________________________
+#
+# Genes decreased in AUD: _________________________________
+#
+
+
+############################################################
+# 11. COMPARE WITH THE MODEL WITHOUT COVARIATES
+############################################################
+
+# How many significant genes do you have and how does it compare to last class when you had
+#no covariates in the model
+
+#
+# Significant genes without covariates: ____________________
+#
+# Significant genes with covariates: _______________________
+#
+
+############################################################
+# 12. EXPORT ALL DESEQ2 RESULTS
+############################################################
+
+write.csv(
+  res_covar_merged,
+  file = "DESeq2_AUD_covariate_adjusted_all_results.csv",
+  row.names = FALSE
+)
+
+
+############################################################
+# 13. CREATE AND EXPORT THE SIGNIFICANT-GENE TABLE
+############################################################
+
+sig_dds_covar <- res_covar_merged[
+  !is.na(res_covar_merged$padj) &
+    res_covar_merged$padj < 0.05,
+]
+
+View(sig_dds_covar)
+
+write.csv(
+  sig_dds_covar,
+  file = "DESeq2_AUD_covariate_adjusted_significant_genes.csv",
+  row.names = FALSE
+)
+
+# STUDENT NOTES:
+#
+
+############################################################
+# 16. EXTRACT NORMALIZED COUNTS
+############################################################
+
+# Raw counts are affected by sequencing depth.
+#
+# DESeq2 normalized counts are raw counts divided by the
+# estimated size factor for each sample.
+#
+# Normalized counts correct for library-size differences.
+#
+# They are not covariate-adjusted counts.
+
+norm_counts <- counts(
+  dds_covar,
+  normalized = TRUE
+)
+
+head(norm_counts)
+
+
+############################################################
+# 17. ADD GENE SYMBOLS TO NORMALIZED COUNTS
+############################################################
+
+# Remove Ensembl version numbers
+
+rownames(norm_counts) <- sub(
+  "\\..*",
+  "",
+  rownames(norm_counts)
+)
+
+# Retrieve annotation
+
+norm_annotation <- getBM(
+  attributes = c(
+    "ensembl_gene_id",
+    "hgnc_symbol"
+  ),
+  filters = "ensembl_gene_id",
+  values = rownames(norm_counts),
+  mart = mart
+)
+
+# Convert normalized counts to a data frame
+
+norm_counts_df <- as.data.frame(norm_counts)
+
+# Preserve the Ensembl IDs
+
+norm_counts_df$ensembl_gene_id <- rownames(norm_counts_df)
+
+# Merge with gene symbols
+
+norm_counts_merged <- merge(
+  norm_counts_df,
+  norm_annotation,
+  by = "ensembl_gene_id",
+  all.x = TRUE
+)
+
+View(norm_counts_merged)
+
+write.csv(
+  norm_counts_merged,
+  file = "AUD_normalized_counts.csv",
+  row.names = FALSE
+)
+
+
+############################################################
+# 18. PLOT NORMALIZED COUNTS FOR ONE GENE
+############################################################
+
+
+
+
+
+
+
+############################################################
+# 21. METASCAPE ANALYSIS
+############################################################
+
+
+############################################################
+# 22. SAVE THE ENTIRE R WORKSPACE
+############################################################
+
+# save.image() saves all objects in the current environment.
+
+save.image(
+  file = 
+    "working_environment_AUD.RData"
+  )
+
+
+
+############################################################
+# 23. RELOAD THE ENTIRE WORKSPACE
+############################################################
+
+load(
+  "/cloud/project/Spring_2026/deseq_class/working_environment_AUD.RData"
+)
+
+
+
+
+############################################################
+# 24. SAVE ONLY THE DESEQ2 OBJECT
+############################################################
+
+saveRDS(
+  dds_covar,
+  file = "dds_AUD_covariates.rds"
+)
+
+
+############################################################
+# 25. RELOAD THE DESEQ2 OBJECT
+############################################################
+
+dds_covar <- readRDS(
+  file = "dds_AUD_covariates.rds"
+)
+
+dds_covar
+resultsNames(dds_covar)
+
