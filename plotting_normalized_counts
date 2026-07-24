@@ -1,0 +1,59 @@
+##we saved working enviroment last time, let's load it
+load("/cloud/project/Summer_2026/Week1_intro/working_environment_AUD.RData")
+###let's extract the normalized counts
+############################################################
+# 16. EXTRACT NORMALIZED COUNTS
+############################################################
+
+# Raw counts are affected by sequencing depth.
+#
+# DESeq2 normalized counts are raw counts divided by the
+# estimated size factor for each sample.
+#
+# Normalized counts correct for library-size differences.
+#
+# They are not covariate-adjusted counts.
+
+norm_counts <- counts(
+  dds_covar,
+  normalized = TRUE
+)
+
+head(norm_counts)
+
+
+############################################################
+# 17. ADD GENE SYMBOLS TO NORMALIZED COUNTS
+############################################################
+
+############################################################
+# 18. PLOT NORMALIZED COUNTS FOR ONE GENE
+############################################################
+
+#but first, we need to add the metadata to this table, 
+#the easiest way is to transpose the normalized counts, so sample names can become names, and gene names can become columns
+#do it your self now and type it in the chat
+norm_counts_t<-t(norm_counts)
+#merge the metadata_subset, use the row names (sample names) to merge
+norm_counts_merged<-merge(meta_subset,norm_counts_t,by="row.names")
+
+##this is a very big table but the metadata is at the end
+#check
+table(norm_counts_merged$alcohol_status)
+##now you can use ggplot to plot the counts of specific gene
+#try this one 	ENSG00000179813, it was significantly downregulated by alcohol
+ggplot(norm_counts_merged,aes(x=alcohol_status,y=ENSG00000179813))+geom_point()
+#do this for an upregulated gene 	ENSG00000115602
+ggplot(norm_counts_merged,aes(x=alcohol_status,y=ENSG00000115602))+geom_point()
+
+#for your presentation, work on better labels, use the gene name instead of ensemble ids
+#you can make use different colors, or make a box plot, be creative
+#plot multiple variables
+# see this
+ggplot(norm_counts_merged,aes(x=alcohol_status,y=ENSG00000179813,color=sex))+geom_point()
+#may be add one more variable
+ggplot(norm_counts_merged,aes(x=alcohol_status,y=ENSG00000179813,shape=smoking,color=sex))+geom_point()
+
+##your homework is to create two figures like this from your own data, one for a significant gene (padj<0.05) with the highest log2fold change (upregulated)
+#other figure is for one for a significant gene (padj<0.05) with the lowest log2fold change (downregulated)
+#send me the code you used in a word document
